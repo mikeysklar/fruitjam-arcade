@@ -60,7 +60,7 @@ More detail: [docs/launcher.md](docs/launcher.md).
 ## Build from source
 
 ```sh
-pip install folder2uf2 circup
+pip install 'folder2uf2>=0.1.2' circup
 tools/build.sh                              # release files in dist/
 MPY_DIR=../circuitpython tools/build.sh     # also rebuild the emulators
 ```
