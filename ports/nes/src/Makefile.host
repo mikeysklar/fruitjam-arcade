@@ -1,0 +1,7 @@
+# Host test harness: make -f Makefile.host && ./run_tests.sh
+CC ?= cc
+CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-parameter
+host_nes: host_main.c nes.c nescore.h nes_ops.inc nes_tables.h
+	$(CC) $(CFLAGS) -DHOST_TEST -o $@ host_main.c
+clean:
+	rm -f host_nes

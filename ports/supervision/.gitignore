@@ -1,0 +1,8 @@
+src/testroms/
+src/build/
+src/host_sv
+src/host_cpu_test
+src/shots/
+src/testcart/*.o
+*.dSYM
+src/supervision.mpy

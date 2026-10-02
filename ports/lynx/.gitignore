@@ -1,0 +1,7 @@
+src/testroms/
+src/build/
+src/host_lynx
+src/host_cpu_test
+src/armbench/*.elf
+src/shots/
+*.dSYM

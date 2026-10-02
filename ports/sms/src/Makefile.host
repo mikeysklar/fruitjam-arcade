@@ -1,0 +1,7 @@
+# Host test harness: make -f Makefile.host && ./run_tests.sh
+CC ?= cc
+CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-parameter
+host_sms: host_main.c sms.c smscore.h z80_ops.inc
+	$(CC) $(CFLAGS) -DHOST_TEST -o $@ host_main.c
+clean:
+	rm -f host_sms

@@ -1,0 +1,10 @@
+font8x8_basic.h
+Author: Daniel Hepper <daniel@hepper.net>
+https://github.com/dhepper/font8x8
+
+License: Public Domain
+
+Based on font8x8.h by Marcel Sondaar and the public domain IBM VGA fonts.
+
+Used in src/font8x8.txt (characters 0x20-0x7F, bit order reversed) for the
+built-in open BIOS font.

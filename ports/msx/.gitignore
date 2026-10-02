@@ -1,0 +1,11 @@
+/src/build/
+/src/*.mpy
+/src/testroms/
+/src/host_msx
+/src/zex/
+/src/*.ppm
+/src/*.png
+/src/*.wav
+/src/armbench/*.elf
+/src/host_zex
+/src/*.log

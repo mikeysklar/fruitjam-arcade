@@ -1,0 +1,12 @@
+src/testroms/
+src/build/
+src/host_main
+src/host_cpu_test
+src/*.ppm
+src/out/
+__pycache__/
+src/armbench/*.elf
+src/testcart/testcart.a78
+src/testcart/testcart.expect
+src/host_trace
+src/*.mpy

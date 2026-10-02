@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Mikey Sklar for Adafruit Industries
+# SPDX-License-Identifier: MIT
+# Host test harness: make -f Makefile.host && ./run_tests.sh
+CC ?= cc
+CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-parameter -Wno-unused-function
+all: host_msx host_zex
+host_msx: host_main.c msx.c msx.h z80.h z80_ops.inc cbios.h
+	$(CC) $(CFLAGS) -DHOST_TEST -o $@ host_main.c
+host_zex: host_zex.c z80.h z80_ops.inc
+	$(CC) $(CFLAGS) -o $@ host_zex.c
+clean:
+	rm -f host_msx host_zex

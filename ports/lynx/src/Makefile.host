@@ -1,0 +1,10 @@
+# Host test harness: make -f Makefile.host && ./run_tests.sh
+CC ?= cc
+CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-parameter
+all: host_lynx host_cpu_test
+host_lynx: host_main.c lynx.c lynxcore.h cpu65c02.h
+	$(CC) $(CFLAGS) -DHOST_TEST -o $@ host_main.c
+host_cpu_test: host_cpu_test.c cpu65c02.h
+	$(CC) $(CFLAGS) -o $@ host_cpu_test.c
+clean:
+	rm -f host_lynx host_cpu_test

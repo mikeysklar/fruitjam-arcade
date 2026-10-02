@@ -1,0 +1,6 @@
+/src/build/
+/src/chip8.mpy
+/src/host_test
+/src/testroms/
+.DS_Store
+__pycache__/

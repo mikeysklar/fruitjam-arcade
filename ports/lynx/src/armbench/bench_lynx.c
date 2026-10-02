@@ -1,0 +1,50 @@
+// SPDX-FileCopyrightText: 2026 Mikey Sklar for Adafruit Industries
+// SPDX-License-Identifier: MIT
+//
+// lynx.c built bare-metal for Cortex-M, driven by bench.py under Unicorn to
+// count Thumb-2 instructions per emulated frame. Same flags as the .mpy.
+#define HOST_TEST
+#include <stdint.h>
+#include <stddef.h>
+void *memset(void *s, int c, size_t n);
+void *memcpy(void *d, const void *s, size_t n);
+#include "../lynx.c"
+
+// Word-at-a-time versions, roughly what the firmware's libc does.
+void *memset(void *s, int c, size_t n) {
+    uint8_t *p = s;
+    uint32_t w = (uint8_t)c * 0x01010101u;
+    while (n && ((uintptr_t)p & 3)) { *p++ = (uint8_t)c; n--; }
+    while (n >= 4) { *(uint32_t *)p = w; p += 4; n -= 4; }
+    while (n--) { *p++ = (uint8_t)c; }
+    return s;
+}
+void *memcpy(void *d, const void *s, size_t n) {
+    uint8_t *dp = d;
+    const uint8_t *sp = s;
+    if ((((uintptr_t)dp | (uintptr_t)sp) & 3) == 0) {
+        while (n >= 4) { *(uint32_t *)dp = *(const uint32_t *)sp; dp += 4; sp += 4; n -= 4; }
+    }
+    while (n--) { *dp++ = *sp++; }
+    return d;
+}
+
+static lynx_t g_ctx;
+static uint16_t g_fb[320 * 240];
+static int16_t g_ring[2 * 4096];
+
+__attribute__((section(".text.entry"))) uint32_t bench_entry(uint32_t cmd, const uint8_t *rom, uint32_t arg) {
+    if (cmd == 0) {
+        int e = lynx_init(&g_ctx, rom, arg, NULL);
+        g_ctx.fb = (uint8_t *)g_fb;
+        g_ctx.fb_width = 320;
+        g_ctx.bpp = 16;
+        g_ctx.y0 = 18;
+        g_ctx.ring = g_ring;
+        g_ctx.ring_frames = 4096;
+        return e;
+    }
+    g_ctx.joy = (uint16_t)arg;
+    ctx_run_frames(&g_ctx, 1);
+    return g_ctx.err;
+}

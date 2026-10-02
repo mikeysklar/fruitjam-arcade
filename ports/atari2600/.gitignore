@@ -1,0 +1,10 @@
+/src/build/
+/src/atari2600.mpy
+/src/host_main
+/src/host_cpu_test
+/src/testroms/
+/src/testrom.ppm
+*.ppm
+*.wav
+.DS_Store
+__pycache__/

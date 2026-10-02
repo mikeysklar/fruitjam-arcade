@@ -1,0 +1,6 @@
+/src/build/
+/src/*.mpy
+/src/testroms/
+/src/host_test
+/src/*.ppm
+/src/*.pgm

@@ -1,0 +1,8 @@
+/src/build/
+/src/*.mpy
+/src/testroms/
+/src/host_nes
+/src/*.ppm
+/src/*.wav
+/src/armbench/*.elf
+/src/host_prof

@@ -1,0 +1,10 @@
+# Host test harness: make -f Makefile.host && ./run_tests.sh
+CC ?= cc
+CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-parameter -Wno-unused-function
+all: host_coleco host_zex
+host_coleco: host_main.c coleco.c cv.h z80.h z80_ops.inc cv_bios.h
+	$(CC) $(CFLAGS) -DHOST_TEST -o $@ host_main.c
+host_zex: host_zex.c z80.h z80_ops.inc
+	$(CC) $(CFLAGS) -o $@ host_zex.c
+clean:
+	rm -f host_coleco host_zex
