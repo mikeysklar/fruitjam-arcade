@@ -1,0 +1,74 @@
+# fruitjam-scumm host harness: same engine and backend as the natmod, built
+# with the system compiler, drives a game headless and writes PNG frames.
+CXX ?= c++
+OPT ?= -O2 -g
+CXXFLAGS = -std=gnu++11 $(OPT) -Wall -Wno-unused -Wno-sign-compare -Wno-reorder -Wno-pragma-pack -fno-exceptions -fno-rtti \
+	-Isrc -DFJ_HOST -DFJ_ADLIB -DNDEBUG -include src/backend/fj_host_arena.h
+BUILD = build/host
+
+ENGINE_SRC := $(wildcard src/scumm/*.cpp src/scumm/players/*.cpp src/common/*.cpp \
+	src/graphics/*.cpp src/audio/*.cpp src/audio/decoders/*.cpp src/audio/softsynth/opl/*.cpp)
+BACKEND_SRC := $(wildcard src/backend/*.cpp src/backend/*.c) src/libc/fj_cxx.cpp
+HOST_SRC := tools/host_main.cpp
+SRC := $(ENGINE_SRC) $(BACKEND_SRC) $(HOST_SRC)
+OBJ := $(patsubst %.c,$(BUILD)/%.o,$(patsubst %.cpp,$(BUILD)/%.o,$(SRC)))
+
+all: scumm_host
+
+scumm_host: $(OBJ)
+	$(CXX) $(OPT) -o $@ $^ -lpthread
+
+$(BUILD)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -MMD -c -o $@ $<
+
+# The harness itself keeps the system allocator.
+$(BUILD)/tools/host_main.o: tools/host_main.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(subst -include src/backend/fj_host_arena.h,,$(CXXFLAGS)) -MMD -c -o $@ $<
+
+$(BUILD)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) -O2 -g -Wall -Isrc -DFJ_HOST -MMD -c -o $@ $<
+
+# The core as a shared library, for tools/pyshim (emu_scumm.py on CPython).
+LIB_OBJ := $(filter-out $(BUILD)/tools/%,$(OBJ))
+build/libfjscumm.dylib: $(LIB_OBJ)
+	$(CXX) $(OPT) -dynamiclib -o $@ $^ -lpthread
+
+adapter-test: build/libfjscumm.dylib
+	python3 tools/pyshim/test_adapter.py testdata/loom-dos-long-demo-en
+
+clean:
+	rm -rf $(BUILD) scumm_host build/libfjscumm.dylib
+
+-include $(OBJ:.o=.d)
+
+# Allocator and printf from the natmod build, checked on the host.
+test: build/test_libc build/test_cdda build/test_math build/test_cdtrack
+	build/test_libc
+	build/test_cdda
+	build/test_math
+	for ch in 1 2; do \
+		ffmpeg -nostdin -loglevel error -y -f lavfi -i "sine=f=440:d=3,aeval=val(0)*0.8+0.1*random(0)" \
+			-ac $$ch -ar 22050 -c:a adpcm_ima_wav -block_size 1024 build/cdtrack$$ch.wav && \
+		ffmpeg -nostdin -loglevel error -y -i build/cdtrack$$ch.wav -f s16le build/cdtrack$$ch.s16 && \
+		build/test_cdtrack build/cdtrack$$ch.wav build/cdtrack$$ch.s16 || exit 1; \
+	done
+
+build/test_math: tools/test_math.c src/libc/fj_math.c
+	@mkdir -p build
+	$(CC) -O1 -g -c -o build/fj_math_t.o src/libc/fj_math.c -Dsin=t_sin -Dpow=t_pow -Dlog10=t_log10 -fno-builtin
+	$(CC) -O1 -g -o $@ tools/test_math.c build/fj_math_t.o
+
+build/test_cdda: tools/test_cdda.cpp build/libfjscumm.dylib
+	$(CXX) $(subst -include src/backend/fj_host_arena.h,,$(CXXFLAGS)) -o $@ $^ -Wl,-rpath,@executable_path
+
+build/test_cdtrack: tools/test_cdtrack.cpp build/libfjscumm.dylib
+	$(CXX) $(subst -include src/backend/fj_host_arena.h,,$(CXXFLAGS)) -o $@ $^ -Wl,-rpath,@executable_path
+
+build/test_libc: tools/test_libc.c src/backend/fj_alloc.c src/libc/fj_printf.c
+	@mkdir -p build
+	$(CC) -O1 -g -fsanitize=address,undefined -Isrc -o $@ tools/test_libc.c \
+		-x c src/backend/fj_alloc.c -Dmalloc=t_malloc -Dfree=t_free -Dcalloc=t_calloc -Drealloc=t_realloc \
+		-x c src/libc/fj_printf.c -Dvsnprintf=t_vsnprintf -Dsnprintf=t_snprintf -Dsprintf=t_sprintf

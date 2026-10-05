@@ -1,8 +1,8 @@
 # Fruit Jam Arcade
 
-Retro consoles on an [Adafruit Fruit Jam](https://www.adafruit.com/product/6200), running on
-CircuitPython. Put games on a microSD card, pick one from the menu, play with John Park's
-arcade pad or a USB gamepad.
+Retro consoles and LucasArts adventures on an [Adafruit Fruit Jam](https://www.adafruit.com/product/6200),
+running on CircuitPython. Put games on a microSD card, pick one from the menu, play with John
+Park's arcade pad or a USB gamepad.
 
 | Console | ROM files | fps on the Fruit Jam |
 |---|---|---|
@@ -16,6 +16,7 @@ arcade pad or a USB gamepad.
 | MSX | `.rom` `.mx1` `.mx2` | 59.9 |
 | Watara Supervision | `.sv` | 61.0 |
 | CHIP-8, SUPER-CHIP | `.ch8` `.sc8` | 60.1 |
+| SCUMM (Loom: DOS EGA, TurboGrafx-16 CD) | a game folder, see below | 60.0 |
 
 No games are included.
 
@@ -38,6 +39,12 @@ as `code.py`. The drive disappears while it unpacks, then the board restarts.
 
 Supervision games often end in `.bin`; rename them to `.sv` (`.bin` means Atari 2600 here).
 
+**SCUMM games** (LucasArts adventures, your own copy) are a folder plus a small marker file.
+For example, copy Loom's `00.LFL` to `99.LFL` into `/sd/scumm/loom/`, then make a text file
+`/sd/cart/Loom.scumm` holding the line `/sd/scumm/loom`. The marker's name is what the menu
+shows. The TurboGrafx-16 CD version's music needs its audio tracks converted first; see
+[ports/scumm/README.md](ports/scumm/README.md).
+
 Optional: add this line to `settings.toml` on CIRCUITPY so games can save while the board is
 plugged into a computer.
 
@@ -54,6 +61,8 @@ CIRCUITPY_SDCARD_USB = false
 | B | back to the console list | B / second fire |
 | Start + Coin, hold 1 s | | back to the menu |
 
+In SCUMM games the D-pad moves the pointer and A clicks.
+
 Each console's exact button map is at the top of its adapter, `CIRCUITPY/emus/emu_<console>.py`.
 More detail: [docs/launcher.md](docs/launcher.md).
 
@@ -69,5 +78,5 @@ The emulator sources are in `ports/<console>/`.
 
 ## License
 
-MIT. Some emulators include code or data under other permissive licenses; see
-[THIRD_PARTY.md](THIRD_PARTY.md).
+MIT, except `ports/scumm` (the SCUMM engine, from ScummVM), which is GPL-3.0-or-later, and some
+emulator code or data under other permissive licenses. See [THIRD_PARTY.md](THIRD_PARTY.md).

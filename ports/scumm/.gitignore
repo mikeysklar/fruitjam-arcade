@@ -1,0 +1,10 @@
+# game data never goes in the repo: get_testdata.sh fetches the free demos
+testdata/
+testdata-private/
+upstream/
+build/
+scumm_host
+/scumm.mpy
+*.png
+*.wav
+.mpy_ld_cache-*

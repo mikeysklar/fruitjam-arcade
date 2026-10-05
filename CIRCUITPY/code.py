@@ -5,7 +5,8 @@
 The SD card is the cartridge, as in Adafruit Arcade Machines:
 
   /sd/cart/   your ROMs (.nes .gb .gbc .a26 .bin .a78 .lnx .o .sms .gg .sg .col .ch8
-              .rom .sv), plus the .sav and .fruitjam.cfg files the games write
+              .rom .sv), SCUMM games (a <name>.scumm marker naming the game's
+              folder), plus the .sav and .fruitjam.cfg files the games write
   /emus/      on CIRCUITPY: the emulators (*.mpy), their adapters (emu_*.py) and
               fjarcade.py
 

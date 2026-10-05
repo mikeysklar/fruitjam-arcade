@@ -27,6 +27,23 @@ import time
 
 import board
 import keypad
+from supervisor import ticks_ms
+
+# Times in the play loop are supervisor.ticks_ms() values, not monotonic_ns():
+# they stay small ints, so the loop allocates nothing. ticks_ms wraps every
+# 2**29 ms (about 6 days); compare them only through ticks_diff().
+_TICKS_PERIOD = 1 << 29
+_TICKS_MASK = _TICKS_PERIOD - 1
+_TICKS_HALF = _TICKS_PERIOD >> 1
+
+# time.sleep() wants seconds; building that float every frame allocates.
+_SLEEP_S = tuple(ms / 1000 for ms in range(64))
+
+
+def ticks_diff(a, b):
+    """a - b in ms for two ticks_ms() values, correct across the wrap."""
+    d = (a - b) & _TICKS_MASK
+    return d - _TICKS_PERIOD if d >= _TICKS_HALF else d
 
 # ---- logical buttons (one bitmask for every console) ---------------------------
 UP = 1 << 0
@@ -49,7 +66,7 @@ ACT_ROTATE = "rotate"  # Button 2
 ACT_PALETTE = "palette"  # Button 3
 
 EXIT_COMBO = START | SELECT  # hold to go back to the menu
-EXIT_HOLD_NS = 1_000_000_000
+EXIT_HOLD_MS = 1000
 
 RED = 0xF800
 YELLOW = 0xFFE0
@@ -130,10 +147,10 @@ def error_screen(video, colour, reason, pad=None):
             pad = Pad(usb=False)
         except Exception:
             pass
-    t = 0
+    t = None
     while True:
-        now = time.monotonic_ns()
-        if now - t >= 2_000_000_000:
+        now = ticks_ms()
+        if t is None or ticks_diff(now, t) >= 2000:
             print("ERROR:", reason)
             t = now
         if pad is not None:
@@ -232,7 +249,7 @@ class Pad:
         if self.mask & EXIT_COMBO == EXIT_COMBO:
             if self._exit_since is None:
                 self._exit_since = now
-            return now - self._exit_since >= EXIT_HOLD_NS
+            return ticks_diff(now, self._exit_since) >= EXIT_HOLD_MS
         self._exit_since = None
         return False
 
@@ -257,7 +274,7 @@ class Audio:
         self.ring = None
         self.audio = None
         self.sample = None
-        self.t_play = time.monotonic_ns()
+        self.t_play = ticks_ms()
         if not cfg.get_bool("sound", True):
             print("sound off: cfg")
             return
@@ -274,7 +291,13 @@ class Audio:
                 audio_output=cfg.get("audio_output", "headphone"),
                 sample_rate=rate, bit_depth=16, i2c=board.I2C(),
             )
-            periphs.volume = cfg.get_float("volume", 0.5)
+            # 0.7 is about -3 dB on the DAC (the library maps 0-1 to -63..+23 dB):
+            # just under 0 dB, where loud sounds clip, and under its 0.75 limit.
+            periphs.volume = cfg.get_float("volume", 0.7)
+            # The library leaves the analog headphone amp at -20.1 dB, too quiet
+            # on the jack. 0 dB is line level, too loud for earbuds.
+            if periphs.dac is not None and periphs.audio_output == "headphone":
+                periphs.dac.headphone_volume = cfg.get_float("headphone_db", -10.0)
             # Peripherals claims BUTTON1-3 as DigitalInOut; Pad needs them.
             for b in getattr(periphs, "_buttons", ()):
                 b.deinit()
@@ -290,11 +313,11 @@ class Audio:
     def start(self):
         if self.ring is not None:
             self.audio.play(self.sample, loop=True)
-        self.t_play = time.monotonic_ns()
+        self.t_play = ticks_ms()
 
     def resync_point(self, now):
         """Ring position one half ahead of the estimated play position."""
-        played = (now - self.t_play) * self.rate // 1_000_000_000
+        played = ticks_diff(now, self.t_play) * self.rate // 1000
         return (played + self.half) % self.ring_frames
 
     def stop(self):
@@ -309,7 +332,7 @@ class Config:
     Written 3 s after the last change, like AAM. Unknown keys are kept.
     """
 
-    DELAY_NS = 3_000_000_000
+    DELAY_MS = 3000
 
     def __init__(self, rom_path):
         self.path = rom_path.rsplit(".", 1)[0] + ".fruitjam.cfg"
@@ -350,10 +373,10 @@ class Config:
         value = str(value)
         if self.values.get(key) != value:
             self.values[key] = value
-            self._dirty_at = time.monotonic_ns()
+            self._dirty_at = ticks_ms()
 
     def tick(self, now):
-        if self._dirty_at is not None and now - self._dirty_at >= self.DELAY_NS:
+        if self._dirty_at is not None and ticks_diff(now, self._dirty_at) >= self.DELAY_MS:
             self._dirty_at = None
             self.flush()
 
@@ -371,14 +394,14 @@ class Config:
 class Saver:
     """Battery RAM to <rom>.sav once it has been left alone for about a second.
 
-    Checked every CHECK_NS by comparing with the last snapshot, so the native
+    Checked every CHECK_MS by comparing with the last snapshot, so the native
     modules need no dirty flag. If /sd is read-only (a computer has the card
     mounted over USB), falls back to /saves, CircuitPython's code-writable
     partition, and reads from there first next time.
     """
 
-    CHECK_NS = 250_000_000
-    QUIET_NS = 1_000_000_000
+    CHECK_MS = 250
+    QUIET_MS = 1000
 
     def __init__(self, rom_path, size):
         self.cart = bytearray(size) if size else None
@@ -388,7 +411,7 @@ class Saver:
         self._snap = None
         self._saved = None
         self._changed_at = None
-        self._t_check = 0
+        self._t_check = ticks_ms()
         if self.cart is None:
             return
         from_fallback = False
@@ -409,13 +432,13 @@ class Saver:
         self._saved = None if from_fallback else self._snap
 
     def tick(self, now):
-        if self.cart is None or now - self._t_check < self.CHECK_NS:
+        if self.cart is None or ticks_diff(now, self._t_check) < self.CHECK_MS:
             return
         self._t_check = now
         if self.cart != self._snap:
             self._snap = bytes(self.cart)
             self._changed_at = now
-        elif self._changed_at is not None and now - self._changed_at >= self.QUIET_NS:
+        elif self._changed_at is not None and ticks_diff(now, self._changed_at) >= self.QUIET_MS:
             self._changed_at = None
             self.flush()
 
@@ -463,6 +486,7 @@ SYSTEMS = {
     ".mx1": "emu_msx",
     ".mx2": "emu_msx",
     ".sv": "emu_supervision",
+    ".scumm": "emu_scumm",
 }
 
 # Files in /cart that are not games (BIOS images the adapters pick up).
@@ -472,7 +496,7 @@ SYSTEM_NAMES = {
     "emu_nes": "NES", "emu_gbc": "Game Boy", "emu_atari2600": "Atari 2600",
     "emu_atari7800": "Atari 7800", "emu_lynx": "Lynx", "emu_sms": "Sega",
     "emu_coleco": "ColecoVision", "emu_chip8": "CHIP-8",
-    "emu_msx": "MSX", "emu_supervision": "Supervision",
+    "emu_msx": "MSX", "emu_supervision": "Supervision", "emu_scumm": "SCUMM",
 }
 
 
@@ -578,9 +602,10 @@ def run(emu, video, pad, cfg, name="emu"):
     audio.start()
     if audio.ring is not None:
         emu.set_audio(audio.ring, audio.half)  # one half ahead
+    rate = audio.rate
     t_anchor = audio.t_play
     s0 = emu.samples()
-    half_ns = audio.half * 1_000_000_000 // audio.rate
+    half_ms = audio.half * 1000 // rate
 
     frames = 0
     t_emu = 0
@@ -590,7 +615,7 @@ def run(emu, video, pad, cfg, name="emu"):
     total = 0
     try:
         while True:
-            t0 = time.monotonic_ns()
+            t0 = ticks_ms()
             mask = pad.poll()
             if pad.exit_requested(t0):
                 break
@@ -606,21 +631,28 @@ def run(emu, video, pad, cfg, name="emu"):
             total += 1
             if total == shot_at:
                 video.screenshot()
-            now = time.monotonic_ns()
-            t_emu += now - t0
+            now = ticks_ms()
+            t_emu += ticks_diff(now, t0)  # whole ms, but the average over 5 s is unbiased
             frames += 1
-            if now - t_report >= 5_000_000_000:
+            if ticks_diff(now, t_report) >= 5000:
                 print("fps %.1f  emu+input %.2f ms  per frame" % (
-                    frames * 1e9 / (now - t_report), t_emu / frames / 1e6))
+                    frames * 1000 / ticks_diff(now, t_report), t_emu / frames))
                 frames = 0
                 t_emu = 0
                 t_report = now
             emu.saver.tick(now)
             cfg.tick(now)
-            due = t_anchor + (emu.samples() - s0) * 1_000_000_000 // audio.rate
-            if due > now:
-                time.sleep((due - now) / 1e9)
-            elif now - due > half_ns:
+            made = emu.samples() - s0
+            if made >= rate:
+                # Move the anchor a second at a time (rate samples = 1000 ms
+                # exactly) so made * 1000 stays a small int.
+                s0 += rate
+                made -= rate
+                t_anchor = (t_anchor + 1000) & _TICKS_MASK
+            ahead = made * 1000 // rate - ticks_diff(now, t_anchor)  # ms until due
+            if ahead > 0:
+                time.sleep(_SLEEP_S[ahead] if ahead < len(_SLEEP_S) else ahead / 1000)
+            elif -ahead > half_ms:
                 # Running slow, more than a half behind the DAC: re-anchor and
                 # move the write point so stale audio is not replayed as noise.
                 if audio.ring is not None:

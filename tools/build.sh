@@ -22,7 +22,7 @@ CP_URL=https://downloads.circuitpython.org/bin/$BOARD/en_US/$CP_UF2
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DIST=$ROOT/dist
 STAGE=$DIST/CIRCUITPY
-PORTS="chip8 gbc atari2600 atari7800 nes sms coleco lynx msx supervision"
+PORTS="chip8 gbc atari2600 atari7800 nes sms coleco lynx msx supervision scumm"
 
 # Older folder2uf2 put the Fruit Jam's CIRCUITPY at 0x100000, over CPSAVES.
 folder2uf2 --list-boards | grep -q "^$BOARD .*offset=0x300000" ||
@@ -34,8 +34,10 @@ mkdir -p "$STAGE/emus"
 if [ -n "${MPY_DIR:-}" ]; then
   for p in $PORTS; do
     echo "== building $p"
-    make -C "$ROOT/ports/$p/src" MPY_DIR="$(cd "$MPY_DIR" && pwd)" ARCH=armv7emsp
-    cp "$ROOT/ports/$p/src/"*.mpy "$ROOT/ports/$p/CIRCUITPY/lib/"
+    src=$ROOT/ports/$p/src
+    [ -f "$src/Makefile" ] || src=$ROOT/ports/$p  # scumm builds from its port folder
+    make -C "$src" MPY_DIR="$(cd "$MPY_DIR" && pwd)" ARCH=armv7emsp
+    cp "$src/"*.mpy "$ROOT/ports/$p/CIRCUITPY/lib/"
   done
 fi
 
